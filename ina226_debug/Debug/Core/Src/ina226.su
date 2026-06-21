@@ -1,0 +1,5 @@
+../Core/Src/ina226.c:6:19:INA226_WriteReg	40	static
+../Core/Src/ina226.c:15:19:INA226_ReadReg	40	static
+../Core/Src/ina226.c:26:6:INA226_Init	16	static
+../Core/Src/ina226.c:41:8:INA226_GetBusVoltage	32	static
+../Core/Src/ina226.c:55:8:INA226_GetShuntVoltage	24	static
