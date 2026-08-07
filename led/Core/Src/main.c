@@ -36,6 +36,7 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 extern float Temp [MAXDEVICES_ON_THE_BUS];
+static volatile  uint8_t speed = 0;
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -65,7 +66,10 @@ static void MX_USART2_UART_Init(void);
 static void MX_I2C2_Init(void);
 static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
-
+uint8_t recieve_buf[1];
+uint8_t buff [20];
+uint8_t dataReceived = 0;
+uint8_t buff_ne_flag = 0;
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -110,8 +114,6 @@ int main(void)
   MX_USART2_UART_Init();
   MX_I2C2_Init();
   MX_TIM3_Init();
-  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
-  TIM3->CCR1 = 20;
   /* USER CODE BEGIN 2 */
   HAL_Delay (500);
   lcd1.hi2c = &hi2c1;
@@ -122,6 +124,7 @@ int main(void)
   HAL_Delay (100);
   lcd_puts(&lcd1, "Temp:");
   lcd_gotoxy(&lcd1, 5, 0);
+  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
 
   get_ROMid();
   get_Temperature();
@@ -129,8 +132,14 @@ int main(void)
   uint32_t led_time = HAL_GetTick ();
   uint8_t acc = 0;
   uint8_t acc_2 = 0;
+  uint8_t temp = 0;
+  float speed_coeff = 0;
   char str [32];
   char str_0[32];
+  HAL_UART_Receive_IT(&huart2, recieve_buf, 1);
+
+
+
 
   /* USER CODE END 2 */
 
@@ -140,10 +149,27 @@ int main(void)
   {
     /* USER CODE END WHILE */
 
+	  if (buff_ne_flag == 1)
+	  {
+		  if (buff[0] == 97)		//если получили a (ASCII-код: 97) - включаем светодиод и заполняем массив принятых данных нулями
+		  	  {
+		  		  GPIOB->BSRR = GPIO_BSRR_BS2;
+		  		  memset(buff,0,sizeof(buff));
+		  		  buff_ne_flag = 0;
+		  	  }
+		  	  else if (buff[0] == 98)	//если получили b (ASCII-код: 98)- выключаем светодиод и заполняем массив принятых данных нулями
+		  	  {
+		  		  GPIOB->BSRR = GPIO_BSRR_BR2;
+		  		  memset(buff,0,sizeof(buff));
+		  		  buff_ne_flag = 0;
+		  	  }
+
+	  }
+
+
     /* USER CODE BEGIN 3 */
 	  if (HAL_GetTick()-led_time >=500)
 	  {
-		  HAL_GPIO_TogglePin(GPIOB,GPIO_PIN_2);
 		  acc++;
 		  acc_2++;
 		  if (acc == 100 || acc_2 ==100)
@@ -159,6 +185,7 @@ int main(void)
 		  HAL_UART_Transmit(&huart2,(uint8_t*)str_0,sizeof(str_0), 100);
 		  uint8_t newline = 10; // ASCII код для '\n'
 		  HAL_UART_Transmit(&huart2, &newline, 1, 10);
+		  HAL_UART_Receive_IT(&huart2, recieve_buf, 1);  // костыль для приема данных
 		  led_time = HAL_GetTick();
 
 	  }
@@ -166,10 +193,12 @@ int main(void)
 	  {
 		  get_Temperature();
 		  //uint8_t t = (uint8_t)Temp[0];
-		  sprintf (str,"%.1f ",Temp[0]);
-		  lcd_gotoxy(&lcd1, 5, 0);
-		  lcd_puts(&lcd1, str);
+		  temp = (uint8_t)Temp[0];
+		  speed_coeff = (temp - 35.0f) / (60.0f - 40.0f);
+		  speed_coeff = (speed_coeff < 0.0f) ? 0.0f : (speed_coeff > 1.0f) ? 1.0f : speed_coeff	;
 
+		  speed = (uint8_t)(speed_coeff * 100.0f);
+		  TIM3->CCR1 = speed;
 		  time = HAL_GetTick();
 	  }
 
@@ -190,10 +219,13 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.HSEPredivValue = RCC_HSE_PREDIV_DIV1;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -203,12 +235,12 @@ void SystemClock_Config(void)
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
-  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
   {
     Error_Handler();
   }
@@ -301,9 +333,9 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 2;
+  htim3.Init.Prescaler = 28;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 99;
+  htim3.Init.Period = 65535;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
@@ -380,7 +412,7 @@ static void MX_USART2_UART_Init(void)
 
   /* USER CODE END USART2_Init 1 */
   huart2.Instance = USART2;
-  huart2.Init.BaudRate = 115200;
+  huart2.Init.BaudRate = 9600;
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;
@@ -410,6 +442,7 @@ static void MX_GPIO_Init(void)
   /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
@@ -429,6 +462,31 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) //функция для приема UART в прерывании
+{
+
+	if (huart == &huart2)
+	{
+
+		HAL_UART_Receive_IT (&huart2, recieve_buf, 1);
+		if (recieve_buf[0] == 120 || recieve_buf[0] == 88) // если получаем X или x то, опускаем флаг и обнуляем буфер
+		{
+			dataReceived = 0;
+			recieve_buf [0] = 0;
+			return;
+		}
+
+		buff[dataReceived] = recieve_buf[0];	 		//при получении полезных данных переписываем их в массив, и обнуляем текущий буфер, крутим счетчик
+		recieve_buf [0] = 0;
+		buff_ne_flag = 1;								//поднимаем флаг, что буфер не пустой
+		dataReceived++;
+	}
+}
+
+
+
 
 /* USER CODE END 4 */
 

@@ -63,8 +63,8 @@ all: main-build
 main-build: fan_pwm.elf secondary-outputs
 
 # Tool invocations
-fan_pwm.elf fan_pwm.map: $(OBJS) $(USER_OBJS) C:\Users\Alexandr\Desktop\fan_pwm\STM32F103C8TX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "fan_pwm.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m3 -T"C:\Users\Alexandr\Desktop\fan_pwm\STM32F103C8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="fan_pwm.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
+fan_pwm.elf fan_pwm.map: $(OBJS) $(USER_OBJS) C:\Users\Alexandr\Documents\GitHub\STM32-study-projects\fan_pwm\STM32F103C8TX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "fan_pwm.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m3 -T"C:\Users\Alexandr\Documents\GitHub\STM32-study-projects\fan_pwm\STM32F103C8TX_FLASH.ld" --specs=nosys.specs -Wl,-Map="fan_pwm.map" -Wl,--gc-sections -static --specs=nano.specs -mfloat-abi=soft -mthumb -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 
